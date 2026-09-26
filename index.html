@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Splayer TV</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+<style>
+  :root {
+    --bg: #0B1418;
+    --card: #142C34;
+    --text-main: #ECF1F4;
+    --text-sub: #B0BBC1;
+    --cyan: #22B8C8;
+    --purple: #B24BF3;
+    --grad: linear-gradient(135deg, var(--cyan), var(--purple));
+  }
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg);
+    color: var(--text-main);
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 28px;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: relative;
+  }
+  .safe-area {
+    position: absolute;
+    top: 54px; bottom: 54px; left: 96px; right: 96px;
+    display: flex; flex-direction: column;
+  }
+  .view { display: none; width: 100%; height: 100%; position: absolute; top:0; left:0; }
+  .view.active { display: block; }
+  
+  .spot-container { position: absolute; width: 100%; height: 100%; overflow: hidden; z-index: -2; background: var(--bg); }
+  .spot {
+    position: absolute; width: 800px; height: 800px; border-radius: 50%; filter: blur(150px);
+    opacity: 0.3; animation: float 20s infinite ease-in-out alternate;
+  }
+  .spot1 { background: var(--cyan); top: -200px; left: -200px; }
+  .spot2 { background: var(--purple); bottom: -200px; right: -200px; animation-delay: -10s; }
+  @keyframes float { 0% { transform: translate(0, 0); } 100% { transform: translate(300px, 200px); } }
+
+  .bg-cover { position: absolute; width: 110%; height: 110%; top: -5%; left: -5%; background-size: cover; background-position: center; filter: blur(60px) brightness(0.45); z-index: -1; display: none; }
+  
+  #view-idle { flex-direction: column; align-items: center; justify-content: center; height: 100%; z-index: 10; }
+  #view-idle.active { display: flex; }
+  .idle-logo svg { width: 300px; height: 300px; }
+  .idle-title { font-size: 96px; font-weight: 700; margin: 20px 0; background: var(--grad); -webkit-background-clip: text; color: transparent; }
+  .idle-sub { font-size: 40px; color: var(--text-sub); }
+
+  #view-music { z-index: 10; }
+  #view-music.active { display: flex; }
+  .music-layout { display: flex; width: 100%; height: 100%; align-items: center; justify-content: space-between; }
+  .music-left { width: 560px; height: 560px; flex-shrink: 0; }
+  .cover-img { width: 100%; height: 100%; border-radius: 32px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); background: var(--card); object-fit: cover; display: none; }
+  .cover-placeholder { width: 100%; height: 100%; border-radius: 32px; background: var(--card); display: flex; align-items: center; justify-content: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+  .cover-placeholder svg { width: 200px; height: 200px; }
+  
+  .music-right { flex: 1; margin-left: 80px; display: flex; flex-direction: column; height: 700px; justify-content: center; }
+  .song-title { font-size: 64px; font-weight: 700; max-height: 160px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; margin-bottom: 16px; }
+  .song-artist { font-size: 36px; color: var(--text-sub); margin-bottom: 8px; }
+  .song-album { font-size: 28px; color: var(--text-sub); margin-bottom: 40px; opacity: 0.8; }
+  
+  .lyrics-container { flex: 1; position: relative; overflow: hidden; mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%); display: flex; flex-direction: column; justify-content: center; }
+  .lyrics-scroll { display: flex; flex-direction: column; transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94); position: absolute; top: 50%; left: 0; right: 0; }
+  .lyric-line { font-size: 40px; color: rgba(255,255,255,0.4); margin: 12px 0; transition: all 0.3s; transform-origin: left center; line-height: 1.4; }
+  .lyric-line.active { font-size: 52px; font-weight: 600; color: rgba(255,255,255,0.8); }
+  
+  .waveform { display: none; align-items: flex-end; height: 160px; gap: 12px; }
+  .wave-bar { width: 32px; background: var(--grad); border-radius: 16px; transition: height 0.1s; height: 20px; }
+  
+  .progress-container { position: absolute; bottom: 54px; left: 96px; right: 96px; display: flex; align-items: center; gap: 24px; font-size: 28px; font-variant-numeric: tabular-nums; z-index: 10; }
+  .progress-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; position: relative; }
+  .progress-bar-fill { height: 100%; background: var(--grad); width: 0%; border-radius: 4px; }
+  
+  #view-video { width: 100%; height: 100%; background: #000; z-index: 20; position: absolute; top:0; left:0; }
+  video { width: 100%; height: 100%; object-fit: contain; }
+  
+  .video-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding: 54px 96px; box-sizing: border-box; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent 40%); opacity: 0; transition: opacity 0.5s; z-index: 21; }
+  .video-overlay.show { opacity: 1; }
+  .video-title { font-size: 64px; font-weight: 700; margin-bottom: 24px; }
+  
+  .pause-overlay { position: absolute; top:0; left:0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 30; }
+  .pause-icon { width: 200px; height: 200px; color: white; opacity: 0.8; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 0.8; transform: scale(1); } }
+
+  #demo-controls { position: absolute; top: 20px; right: 20px; z-index: 100; display: none; gap: 8px; }
+  #demo-controls button { padding: 12px 20px; font-size: 20px; background: #333; color: white; border: none; border-radius: 8px; cursor: pointer; }
+  
+  #media { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; z-index: 0; display: none; }
+</style>
+</head>
+<body>
+  <div class="spot-container" id="spot-container">
+    <div class="spot spot1"></div>
+    <div class="spot spot2"></div>
+  </div>
+  
+  <div class="bg-cover" id="bg-cover"></div>
+  <video id="media"></video>
+
+  <div id="view-idle" class="view active">
+    <div class="idle-logo">
+      <svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#22B8C8" /><stop offset="100%" stop-color="#B24BF3" />
+          </linearGradient>
+        </defs>
+        <rect x="10" y="30" width="12" height="40" rx="6" fill="url(#logoGrad)"/>
+        <rect x="28" y="10" width="12" height="80" rx="6" fill="url(#logoGrad)"/>
+        <rect x="46" y="20" width="12" height="60" rx="6" fill="url(#logoGrad)"/>
+        <rect x="64" y="40" width="12" height="20" rx="6" fill="url(#logoGrad)"/>
+        <rect x="82" y="15" width="12" height="70" rx="6" fill="url(#logoGrad)"/>
+      </svg>
+    </div>
+    <div class="idle-title">Splayer</div>
+    <div class="idle-sub">Sẵn sàng phát từ điện thoại</div>
+  </div>
+
+  <div id="view-music" class="view">
+    <div class="safe-area">
+      <div class="music-layout">
+        <div class="music-left">
+          <img id="music-cover" class="cover-img" src="" alt="Cover">
+          <div id="music-cover-placeholder" class="cover-placeholder">
+            <!-- [26/9 - X] gradient rieng: tham chieu #logoGrad nam trong SVG man cho (dang an)
+                 -> Chrome cua box khong ve -> o anh bia trong tron (anh TV Brian chup) -->
+            <svg viewBox="0 0 100 100">
+              <defs><linearGradient id="coverGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22B8C8"/><stop offset="1" stop-color="#B24BF3"/></linearGradient></defs>
+              <rect x="10" y="30" width="12" height="40" rx="6" fill="url(#coverGrad)"/>
+              <rect x="28" y="10" width="12" height="80" rx="6" fill="url(#coverGrad)"/>
+              <rect x="46" y="20" width="12" height="60" rx="6" fill="url(#coverGrad)"/>
+              <rect x="64" y="40" width="12" height="20" rx="6" fill="url(#coverGrad)"/>
+              <rect x="82" y="15" width="12" height="70" rx="6" fill="url(#coverGrad)"/>
+            </svg>
+          </div>
+        </div>
+        <div class="music-right">
+          <div class="song-title" id="music-title">Tên bài hát</div>
+          <div class="song-artist" id="music-artist">Ca sĩ</div>
+          <div class="song-album" id="music-album">Album</div>
+          
+          <div class="lyrics-container">
+            <div class="lyrics-scroll" id="lyrics-scroll"></div>
+            <div class="waveform" id="waveform">
+              <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="progress-container">
+        <div id="time-current">0:00</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+        <div id="time-total">0:00</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-video" class="view">
+    <div class="video-overlay" id="video-overlay">
+      <div class="video-title" id="video-title">Tên Video</div>
+      <div class="progress-container" style="position: static; margin-bottom: 0;">
+        <div id="vid-time-current">0:00</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="vid-progress-fill"></div></div>
+        <div id="vid-time-total">0:00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pause-overlay" id="pause-overlay">
+    <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+  </div>
+
+  <div id="demo-controls">
+    <button onclick="setDemoState('idle')">Chờ</button>
+    <button onclick="setDemoState('music')">Nhạc</button>
+    <button onclick="setDemoState('music-nolyrics')">Nhạc không lời</button>
+    <button onclick="setDemoState('pause')">Tạm dừng</button>
+    <button onclick="setDemoState('video')">Video</button>
+  </div>
+
+  <script>
+    function formatTime(sec) {
+      if (!sec || isNaN(sec)) return "0:00";
+      sec = Math.floor(sec);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return m + ":" + (s < 10 ? "0" + s : s);
+    }
+    
+    const views = { idle: document.getElementById('view-idle'), music: document.getElementById('view-music'), video: document.getElementById('view-video') };
+    const mediaEl = document.getElementById('media');
+    const pauseOverlay = document.getElementById('pause-overlay');
+    const bgCover = document.getElementById('bg-cover');
+    const spotContainer = document.getElementById('spot-container');
+    const videoOverlay = document.getElementById('video-overlay');
+    
+    let currentState = 'idle';
+    let isPaused = false;
+    let lyricsData = [];
+    let lyricsOffset = 0;
+    let currentDuration = 0;
+    let currentTime = 0;
+    let videoOverlayTimeout = null;
+    
+    let audioCtx, analyser, dataArray;
+    let waveBars = document.querySelectorAll('.wave-bar');
+    let waveAnimationId;
+    let audioSetupDone = false;
+
+    // [25/9 - X] KHONG noi the media vao WebAudio: nhac den tu may chu tren dien
+    // thoai (khac nguon, khong CORS) -> MediaElementSource xuat IM LANG -> TV cam
+    // tieng. Song am vi vay chi la TRANG TRI (nhun deu), khong theo nhac.
+    function setupAudioNode() {
+      return;
+      if (audioSetupDone) return;
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 32;
+        const source = audioCtx.createMediaElementSource(mediaEl);
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        audioSetupDone = true;
+      } catch(e) {
+        console.warn("Khong the setup WebAudio, se dung hieu ung trang tri", e);
+      }
+    }
+
+    function animateWaveform() {
+      if (currentState !== 'music' || lyricsData.length > 0) return;
+      if (audioCtx && analyser && !isPaused) {
+        analyser.getByteFrequencyData(dataArray);
+        const step = Math.floor(dataArray.length / 5);
+        for(let i=0; i<5; i++) {
+          const val = dataArray[i * step];
+          waveBars[i].style.height = (20 + (val / 255) * 120) + 'px';
+        }
+      } else if (!isPaused) {
+        const t = Date.now() / 500;
+        for(let i=0; i<5; i++) {
+          waveBars[i].style.height = (20 + (Math.sin(t * Math.PI + i) * 0.5 + 0.5) * 120) + 'px';
+        }
+      }
+      waveAnimationId = requestAnimationFrame(animateWaveform);
+    }
+
+    function showView(name) {
+      Object.values(views).forEach(v => v.classList.remove('active'));
+      views[name].classList.add('active');
+      currentState = name;
+      
+      if (name === 'video') {
+        mediaEl.style.display = 'block';
+        bgCover.style.display = 'none';
+        spotContainer.style.display = 'none';
+        mediaEl.style.zIndex = 15;
+      } else {
+        mediaEl.style.zIndex = 0;
+        mediaEl.style.display = 'none';
+        if (name === 'idle') {
+          bgCover.style.display = 'none';
+          spotContainer.style.display = 'block';
+        }
+      }
+      updatePauseOverlay();
+    }
+
+    function updatePauseOverlay() {
+      pauseOverlay.style.display = (isPaused && (currentState === 'music' || currentState === 'video')) ? 'flex' : 'none';
+    }
+
+    function updateMetadata(title, artist, album, coverUrl, isVideo) {
+      if (isVideo) {
+        document.getElementById('video-title').textContent = title || '';
+      } else {
+        document.getElementById('music-title').textContent = title || 'Chưa rõ';
+        document.getElementById('music-artist').textContent = artist || 'Chưa rõ';
+        document.getElementById('music-album').textContent = album || '';
+        const coverImg = document.getElementById('music-cover');
+        const placeholder = document.getElementById('music-cover-placeholder');
+        if (coverUrl) {
+          coverImg.src = coverUrl; coverImg.style.display = 'block'; placeholder.style.display = 'none';
+          bgCover.style.backgroundImage = `url(${coverUrl})`; bgCover.style.display = 'block'; spotContainer.style.display = 'none';
+        } else {
+          coverImg.style.display = 'none'; placeholder.style.display = 'flex';
+          bgCover.style.display = 'none'; spotContainer.style.display = 'block';
+        }
+      }
+    }
+
+    function showVideoOverlay() {
+      videoOverlay.classList.add('show');
+      clearTimeout(videoOverlayTimeout);
+      videoOverlayTimeout = setTimeout(() => { if (!isPaused) videoOverlay.classList.remove('show'); }, 4000);
+    }
+
+    const lyricsScroll = document.getElementById('lyrics-scroll');
+    const waveform = document.getElementById('waveform');
+
+    function renderLyrics() {
+      lyricsScroll.innerHTML = '';
+      if (!lyricsData || lyricsData.length === 0) {
+        lyricsScroll.style.display = 'none'; waveform.style.display = 'flex';
+        cancelAnimationFrame(waveAnimationId); animateWaveform();
+        return;
+      }
+      lyricsScroll.style.display = 'flex'; waveform.style.display = 'none';
+      lyricsData.forEach((line, idx) => {
+        const div = document.createElement('div');
+        div.className = 'lyric-line'; div.id = 'lyric-line-' + idx;
+        line.text.split(' ').forEach(w => {
+          const span = document.createElement('span'); span.textContent = w;
+          span.style.background = 'var(--text-main)'; span.style.webkitBackgroundClip = 'text';
+          span.style.webkitTextFillColor = 'currentColor'; span.style.display = 'inline-block';
+          span.style.marginRight = '12px';
+          div.appendChild(span);
+        });
+        lyricsScroll.appendChild(div);
+      });
+      updateLyricsTime(0);
+    }
+
+    function updateLyricsTime(timeSec) {
+      if (!lyricsData || lyricsData.length === 0) return;
+      const ms = timeSec * 1000 - lyricsOffset;
+      let activeIdx = -1;
+      for (let i = 0; i < lyricsData.length; i++) { if (ms >= lyricsData[i].t) activeIdx = i; else break; }
+      
+      const lines = lyricsScroll.children;
+      for (let i = 0; i < lines.length; i++) {
+        const lineEl = lines[i];
+        if (i === activeIdx) {
+          lineEl.classList.add('active');
+          lineEl.style.opacity = 1;
+          const startT = lyricsData[i].t;
+          const endT = (i + 1 < lyricsData.length) ? lyricsData[i+1].t : startT + 5000;
+          let progress = Math.max(0, Math.min(1, (ms - startT) / (endT - startT)));
+          const spans = lineEl.children;
+          const totalWords = spans.length;
+          const currentWordIdx = Math.floor(progress * totalWords);
+          
+          for(let j=0; j<totalWords; j++) {
+            if (j < currentWordIdx) {
+              spans[j].style.background = 'var(--grad)';
+              spans[j].style.webkitBackgroundClip = 'text'; spans[j].style.webkitTextFillColor = 'transparent';
+            } else if (j === currentWordIdx) {
+              const p = Math.floor(((progress * totalWords) - j) * 100);
+              spans[j].style.background = `linear-gradient(to right, #22B8C8 0%, #B24BF3 ${p}%, rgba(255,255,255,0.8) ${p}%, rgba(255,255,255,0.8) 100%)`;
+              spans[j].style.webkitBackgroundClip = 'text'; spans[j].style.webkitTextFillColor = 'transparent';
+            } else {
+              spans[j].style.background = 'rgba(255,255,255,0.8)';
+              spans[j].style.webkitBackgroundClip = 'text'; spans[j].style.webkitTextFillColor = 'transparent';
+            }
+          }
+        } else {
+          lineEl.classList.remove('active');
+          for(let j=0; j<lineEl.children.length; j++) {
+            lineEl.children[j].style.background = 'rgba(255,255,255,0.4)';
+            lineEl.children[j].style.webkitBackgroundClip = 'text';
+            lineEl.children[j].style.webkitTextFillColor = 'transparent';
+          }
+          const dist = Math.abs(i - activeIdx);
+          lineEl.style.opacity = dist === 0 ? 1 : (dist === 1 ? 0.6 : (dist === 2 ? 0.3 : 0));
+        }
+      }
+      if (activeIdx >= 0 && lines[activeIdx]) {
+        lyricsScroll.style.transform = `translateY(-${lines[activeIdx].offsetTop + lines[activeIdx].clientHeight / 2}px)`;
+      } else {
+        lyricsScroll.style.transform = `translateY(0px)`;
+      }
+    }
+
+    function updateProgress(time, duration) {
+      if (isNaN(time)) time = 0; if (isNaN(duration) || duration <= 0) duration = 1;
+      let pct = Math.min(100, (time / duration) * 100);
+      const timeStr = formatTime(time); const durStr = formatTime(duration);
+      if (currentState === 'video') {
+        document.getElementById('vid-progress-fill').style.width = pct + '%';
+        document.getElementById('vid-time-current').textContent = timeStr;
+        document.getElementById('vid-time-total').textContent = durStr;
+      } else {
+        document.getElementById('progress-fill').style.width = pct + '%';
+        document.getElementById('time-current').textContent = timeStr;
+        document.getElementById('time-total').textContent = durStr;
+      }
+      updateLyricsTime(time);
+    }
+
+    let pendingLyrics = null, currentContentId = '', loadCount = 0, lastIsVideo = false;
+    const isDemo = window.location.search.includes('demo') || typeof cast === 'undefined' || !cast.framework;
+    if (!isDemo) {
+      const ctx = cast.framework.CastReceiverContext.getInstance();
+      const playerManager = ctx.getPlayerManager();
+      const options = new cast.framework.CastReceiverOptions();
+      options.disableIdleTimeout = true; options.maxInactivity = 86400;
+      
+      playerManager.setMediaElement(mediaEl);
+      playerManager.setMessageInterceptor(cast.framework.messages.MessageType.LOAD, loadRequestData => {
+        setupAudioNode();
+        const media = loadRequestData.media;
+        if (!media) return loadRequestData;
+        const meta = media.metadata;
+        const isVideo = media.contentType && media.contentType.startsWith('video/');
+        // [25/9 - X] loi co the toi TRUOC LOAD -> giu theo contentId, khop thi dung.
+        currentContentId = media.contentId || '';
+        loadCount++; lastIsVideo = !!(isVideo || (meta && meta.metadataType === 0));
+        if (pendingLyrics && pendingLyrics.contentId === currentContentId) {
+          lyricsData = pendingLyrics.lines || []; lyricsOffset = pendingLyrics.offset || 0;
+        } else { lyricsData = []; lyricsOffset = 0; }
+        
+        if (isVideo || (meta && meta.metadataType === 0)) {
+          showView('video'); updateMetadata(meta ? meta.title : '', '', '', null, true);
+        } else {
+          showView('music');
+          updateMetadata(meta ? meta.title : '', meta ? meta.artist || meta.subtitle : '', meta ? meta.albumName : '', (meta && meta.images && meta.images.length > 0) ? meta.images[0].url : null, false);
+        }
+        renderLyrics(); return loadRequestData;
+      });
+      
+      playerManager.addEventListener(cast.framework.events.EventType.PLAYING, () => {
+        // [26/9 - X] dang phat ma man hinh o logo (vd vua doi bai) -> ve man phat
+        if (currentState === 'idle' && loadCount > 0) showView(lastIsVideo ? 'video' : 'music');
+        isPaused = false; updatePauseOverlay();
+        if (currentState === 'video') showVideoOverlay();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      });
+      playerManager.addEventListener(cast.framework.events.EventType.PAUSE, () => {
+        isPaused = true; updatePauseOverlay();
+        if (currentState === 'video') showVideoOverlay();
+      });
+      playerManager.addEventListener(cast.framework.events.EventType.TIME_UPDATE, (ev) => {
+        // [25/9 - X] su kien TIME_UPDATE khong co 'duration' -> hoi playerManager.
+        currentDuration = playerManager.getDurationSec(); currentTime = ev.currentMediaTime;
+        updateProgress(currentTime, currentDuration);
+      });
+      // [26/9 - X] Doi bai: bai cu bi ngat ban MEDIA_FINISHED SAU khi bai moi da LOAD
+      // -> truoc day nhay ve logo du nhac van phat (Brian bat). Cho 4s, khong co
+      // bai moi va trinh phat that su dung thi moi ve man cho.
+      playerManager.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, () => {
+        const mark = loadCount;
+        setTimeout(() => {
+          const st = playerManager.getPlayerState && playerManager.getPlayerState();
+          if (loadCount === mark && st !== 'PLAYING' && st !== 'BUFFERING') showView('idle');
+        }, 4000);
+      });
+      playerManager.addEventListener(cast.framework.events.EventType.SEEKING, () => { if (currentState === 'video') showVideoOverlay(); });
+      
+      ctx.addCustomMessageListener('urn:x-cast:com.splayer.tv', (ev) => {
+        try {
+          const payload = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+          const cid = payload.contentId || '';
+          if (payload.type === 'lyrics') {
+            pendingLyrics = { contentId: cid, lines: payload.lines || [], offset: (pendingLyrics && pendingLyrics.contentId === cid) ? pendingLyrics.offset : 0 };
+            if (!cid || cid === currentContentId) { lyricsData = pendingLyrics.lines; renderLyrics(); }
+          } else if (payload.type === 'offset') {
+            if (pendingLyrics && pendingLyrics.contentId === cid) pendingLyrics.offset = payload.ms || 0;
+            if (!cid || cid === currentContentId) lyricsOffset = payload.ms || 0;
+          }
+        } catch(e) { console.error('Loi parse lyrics:', e); }
+      });
+      ctx.start(options);
+    } else {
+      document.getElementById('demo-controls').style.display = 'flex';
+      const demoLyrics = [
+        {t: 2000, text: "Cơn mưa rào vô tình"}, {t: 5000, text: "Làm ướt áo em rồi"},
+        {t: 8000, text: "Nhìn hạt mưa rơi rơi ngoài hiên vắng thật buồn"},
+        {t: 12000, text: "Dòng người vội vàng bước qua bước lại trong chiều nhạt nhoà một câu hát xưa thật dài để thử xem giao diện có tự động xuống dòng và bôi màu đúng như yêu cầu hay không"},
+        {t: 25000, text: "Chờ đợi một vòng tay"}, {t: 28000, text: "Ôm lấy tấm vai gầy"},
+        {t: 32000, text: "Nhìn thời gian trôi đi chẳng chờ ai bao giờ"},
+        {t: 36000, text: "Một ngày trôi qua vẫn thế"}, {t: 40000, text: "Vẫn mong ai quay về"},
+        {t: 45000, text: "Mang theo nụ cười ấm áp như ngày xưa"}
+      ];
+      
+      const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 600;
+      const cctx = canvas.getContext('2d');
+      const grd = cctx.createLinearGradient(0, 0, 600, 600);
+      grd.addColorStop(0, "#22B8C8"); grd.addColorStop(1, "#B24BF3");
+      cctx.fillStyle = grd; cctx.fillRect(0,0,600,600);
+      cctx.fillStyle = "white"; cctx.font = "bold 80px sans-serif"; cctx.textAlign = "center"; cctx.fillText("VẾT MƯA", 300, 300);
+      const mockCover = canvas.toDataURL();
+      
+      let demoTimer;
+      window.setDemoState = function(state) {
+        clearInterval(demoTimer); isPaused = false;
+        if (state === 'idle') { showView('idle'); }
+        else if (state === 'music' || state === 'music-nolyrics') {
+          showView('music'); updateMetadata("Vết mưa", "Vũ Cát Tường", "Vết mưa (Single)", mockCover, false);
+          lyricsData = state === 'music' ? demoLyrics : []; renderLyrics();
+          currentDuration = 270; currentTime = 13; updateProgress(currentTime, currentDuration);
+          demoTimer = setInterval(() => {
+            currentTime += 0.1; if (currentTime > currentDuration) currentTime = currentDuration;
+            updateProgress(currentTime, currentDuration);
+          }, 100);
+        } else if (state === 'pause') { isPaused = true; updatePauseOverlay(); }
+        else if (state === 'video') {
+          showView('video'); updateMetadata("Video Demo", "", "", null, true);
+          document.getElementById('view-video').style.background = 'linear-gradient(45deg, #111, #333, #111)';
+          document.getElementById('view-video').style.backgroundSize = '400% 400%';
+          showVideoOverlay();
+          currentDuration = 600; currentTime = 120; updateProgress(currentTime, currentDuration);
+          demoTimer = setInterval(() => { currentTime += 0.1; updateProgress(currentTime, currentDuration); }, 100);
+        }
+      };
+      const urlParams = new URLSearchParams(window.location.search);
+      const initialState = urlParams.get('state') || 'music';
+      setDemoState(initialState);
+    }
+  </script>
+</body>
+</html>
