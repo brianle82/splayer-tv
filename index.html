@@ -77,7 +77,8 @@
   .progress-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; position: relative; }
   .progress-bar-fill { height: 100%; background: var(--grad); width: 0%; border-radius: 4px; }
   
-  #view-video { width: 100%; height: 100%; background: #000; z-index: 20; position: absolute; top:0; left:0; }
+  /* [27/9 - X] nen TRONG SUOT: truoc la #000 o lop 20, de len <video> lop 15 -> TV co tieng khong hinh */
+  #view-video { width: 100%; height: 100%; background: transparent; z-index: 20; position: absolute; top:0; left:0; }
   video { width: 100%; height: 100%; object-fit: contain; }
   
   .video-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding: 54px 96px; box-sizing: border-box; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent 40%); opacity: 0; transition: opacity 0.5s; z-index: 21; }
