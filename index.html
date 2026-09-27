@@ -107,16 +107,12 @@
   <div id="view-idle" class="view active">
     <div class="idle-logo">
       <svg viewBox="0 0 100 100">
-        <defs>
-          <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#22B8C8" /><stop offset="100%" stop-color="#B24BF3" />
-          </linearGradient>
-        </defs>
-        <rect x="10" y="30" width="12" height="40" rx="6" fill="url(#logoGrad)"/>
-        <rect x="28" y="10" width="12" height="80" rx="6" fill="url(#logoGrad)"/>
-        <rect x="46" y="20" width="12" height="60" rx="6" fill="url(#logoGrad)"/>
-        <rect x="64" y="40" width="12" height="20" rx="6" fill="url(#logoGrad)"/>
-        <rect x="82" y="15" width="12" height="70" rx="6" fill="url(#logoGrad)"/>
+        <!-- [27/9 - X] dung hinh hieu app: 5 cot cao dan thap thanh hinh play, mau hsl(187+26i) -->
+        <rect x="11.30" y="7.00" width="13.59" height="86.00" rx="6.79" fill="hsl(187,88%,62%)"/>
+        <rect x="29.40" y="14.74" width="13.59" height="70.52" rx="6.79" fill="hsl(213,88%,62%)"/>
+        <rect x="47.51" y="22.91" width="13.59" height="54.18" rx="6.79" fill="hsl(239,88%,62%)"/>
+        <rect x="65.61" y="31.08" width="13.59" height="37.84" rx="6.79" fill="hsl(265,88%,62%)"/>
+        <rect x="83.71" y="39.68" width="13.59" height="20.64" rx="6.79" fill="hsl(291,88%,62%)"/>
       </svg>
     </div>
     <div class="idle-title">Splayer</div>
@@ -132,12 +128,11 @@
             <!-- [26/9 - X] gradient rieng: tham chieu #logoGrad nam trong SVG man cho (dang an)
                  -> Chrome cua box khong ve -> o anh bia trong tron (anh TV Brian chup) -->
             <svg viewBox="0 0 100 100">
-              <defs><linearGradient id="coverGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22B8C8"/><stop offset="1" stop-color="#B24BF3"/></linearGradient></defs>
-              <rect x="10" y="30" width="12" height="40" rx="6" fill="url(#coverGrad)"/>
-              <rect x="28" y="10" width="12" height="80" rx="6" fill="url(#coverGrad)"/>
-              <rect x="46" y="20" width="12" height="60" rx="6" fill="url(#coverGrad)"/>
-              <rect x="64" y="40" width="12" height="20" rx="6" fill="url(#coverGrad)"/>
-              <rect x="82" y="15" width="12" height="70" rx="6" fill="url(#coverGrad)"/>
+              <rect x="11.30" y="7.00" width="13.59" height="86.00" rx="6.79" fill="hsl(187,88%,62%)"/>
+              <rect x="29.40" y="14.74" width="13.59" height="70.52" rx="6.79" fill="hsl(213,88%,62%)"/>
+              <rect x="47.51" y="22.91" width="13.59" height="54.18" rx="6.79" fill="hsl(239,88%,62%)"/>
+              <rect x="65.61" y="31.08" width="13.59" height="37.84" rx="6.79" fill="hsl(265,88%,62%)"/>
+              <rect x="83.71" y="39.68" width="13.59" height="20.64" rx="6.79" fill="hsl(291,88%,62%)"/>
             </svg>
           </div>
         </div>
@@ -317,6 +312,7 @@
       lyricsData.forEach((line, idx) => {
         const div = document.createElement('div');
         div.className = 'lyric-line'; div.id = 'lyric-line-' + idx;
+        div.style.position = 'relative'; // [27/9 - X] de offsetLeft cua tung chu tinh theo dong
         line.text.split(' ').forEach(w => {
           const span = document.createElement('span'); span.textContent = w;
           span.style.background = 'var(--text-main)'; span.style.webkitBackgroundClip = 'text';
@@ -344,26 +340,29 @@
           const startT = lyricsData[i].t;
           const endT = (i + 1 < lyricsData.length) ? lyricsData[i+1].t : startT + 5000;
           let progress = Math.max(0, Math.min(1, (ms - startT) / (endT - startT)));
+          // [27/9 - X] vì trước tô TỪNG CHỮ: mỗi chữ tự chạy dải xanh->tím riêng -> nhìn thành
+          // từng khúc; điện thoại tô liền mạch cả câu. Nay: dải màu trải theo CẢ DÒNG (vị trí
+          // chữ trong dòng), vệt tô tiến theo số KÝ TỰ, chữ xuống hàng thì hàng dưới tô sau.
           const spans = lineEl.children;
-          const totalWords = spans.length;
-          const currentWordIdx = Math.floor(progress * totalWords);
-          
-          for(let j=0; j<totalWords; j++) {
-            if (j < currentWordIdx) {
-              spans[j].style.background = 'var(--grad)';
-              spans[j].style.webkitBackgroundClip = 'text'; spans[j].style.webkitTextFillColor = 'transparent';
-            } else if (j === currentWordIdx) {
-              const p = Math.floor(((progress * totalWords) - j) * 100);
-              spans[j].style.background = `linear-gradient(to right, #22B8C8 0%, #B24BF3 ${p}%, rgba(255,255,255,0.8) ${p}%, rgba(255,255,255,0.8) 100%)`;
-              spans[j].style.webkitBackgroundClip = 'text'; spans[j].style.webkitTextFillColor = 'transparent';
-            } else {
-              spans[j].style.background = 'rgba(255,255,255,0.8)';
-              spans[j].style.webkitBackgroundClip = 'text'; spans[j].style.webkitTextFillColor = 'transparent';
-            }
+          const lineW = lineEl.clientWidth || 1;
+          let tong = 0; for (let j = 0; j < spans.length; j++) tong += spans[j].textContent.length || 1;
+          const daTo = progress * tong;
+          let truoc = 0;
+          for (let j = 0; j < spans.length; j++) {
+            const n = spans[j].textContent.length || 1;
+            const f = Math.max(0, Math.min(1, (daTo - truoc) / n)) * 100;
+            truoc += n;
+            const sp = spans[j];
+            sp.style.backgroundImage = `linear-gradient(to right, rgba(255,255,255,0) ${f}%, rgba(255,255,255,0.8) ${Math.min(100, f + 4)}%), linear-gradient(to right, #22B8C8, #B24BF3)`;
+            sp.style.backgroundSize = `100% 100%, ${lineW}px 100%`;
+            sp.style.backgroundPosition = `0 0, ${-sp.offsetLeft}px 0`;
+            sp.style.backgroundRepeat = 'no-repeat';
+            sp.style.webkitBackgroundClip = 'text'; sp.style.webkitTextFillColor = 'transparent';
           }
         } else {
           lineEl.classList.remove('active');
           for(let j=0; j<lineEl.children.length; j++) {
+            lineEl.children[j].style.backgroundImage = 'none'; // [27/9 - X] xoá lớp tô của dòng vừa hát
             lineEl.children[j].style.background = 'rgba(255,255,255,0.4)';
             lineEl.children[j].style.webkitBackgroundClip = 'text';
             lineEl.children[j].style.webkitTextFillColor = 'transparent';
