@@ -467,6 +467,14 @@
           }
         } catch(e) { console.error('Loi parse lyrics:', e); }
       });
+      // [27/9 - X] vì điện thoại bị vuốt tắt / mất Wi-Fi thì theo mặc định trang vẫn phát tiếp.
+      // Không còn điện thoại nào kết nối sau 5 giây -> tự dừng (5 giây để kịp nối lại khi chập chờn).
+      let hetSenderTimer = null;
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, () => {
+        clearTimeout(hetSenderTimer);
+        hetSenderTimer = setTimeout(() => { if (ctx.getSenders().length === 0) ctx.stop(); }, 5000);
+      });
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, () => clearTimeout(hetSenderTimer));
       ctx.start(options);
     } else {
       document.getElementById('demo-controls').style.display = 'flex';
